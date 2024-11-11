@@ -1,0 +1,6 @@
+	training	cross validation	testing	best K	best y	best C	MCC cross val	MCC test
+0	0,1,2	3	4	23	scale	4	0.849	0.802
+1	1,2,3	4	0	22	2	1	0.822	0.822
+2	2,3,4	0	1	22	2	2	0.83	0.787
+3	3,4,0	1	2	22	2	4	0.816	0.791
+4	4,0,1	2	3	23	scale	8	0.818	0.841

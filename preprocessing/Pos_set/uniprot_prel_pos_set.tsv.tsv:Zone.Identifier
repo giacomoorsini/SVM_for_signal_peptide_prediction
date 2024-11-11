@@ -1,0 +1,3 @@
+[ZoneTransfer]
+ZoneId=3
+HostUrl=https://rest.uniprot.org/uniprotkb/stream?download=true&fields=accession%2Cft_signal&format=tsv&query=%28%28taxonomy_id%3A2759%29+AND+%28reviewed%3Atrue%29+NOT+%28length%3A%5B0+TO+29%5D%29+AND+%28ft_signal_exp%3A*%29%29

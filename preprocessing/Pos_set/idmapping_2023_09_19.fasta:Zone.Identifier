@@ -1,0 +1,3 @@
+[ZoneTransfer]
+ZoneId=3
+HostUrl=https://rest.uniprot.org/idmapping/uniprotkb/results/stream/0df0abd576f60212303fd43a13a67d829920a192?download=true&format=fasta

@@ -1,0 +1,3 @@
+[ZoneTransfer]
+ZoneId=3
+HostUrl=https://rest.uniprot.org/idmapping/uniprotkb/results/stream/4df0870646a4bd3ccd4e4aa72e499ee2a95cbb6e?download=true&fields=accession%2Cft_transmem%2Cft_transit&format=tsv
