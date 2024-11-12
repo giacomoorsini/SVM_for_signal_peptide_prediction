@@ -90,12 +90,12 @@ It is also necessary to download some Python packages: `pandas`, `Matplotlib`, `
 
 All UniProt searches were performed using **Release 2023_04**.
 
-## 1. Data collection and processing
+# 1. Data collection and processing
 The goal of this first section is to retrieve two preliminary processing sets (Positive and Negative) from [UniProt](https://www.uniprot.org/)(Release 2023_04), filter them and split them into training (cross-validation) and benchmarking set. The creation of representative and unbiased datasets is the first step for every machine learning method and involves both data collection and data preprocessing.
 
 We’ll focus only on Eukaryotes, neglecting bacterial and archaea proteins.
 
-### 1.1. Retrieve training and benchmarking datasets from UniProtKB
+## 1.1. Retrieve training and benchmarking datasets from UniProtKB
 First, access the `Advanced search` section of the UniProt website and write the desired query to retrieve the proteins. In my case, I opted for these parameters:
 
 - Pfam identifier, SCOP2 lineage identifier, or CATH lineage identifier (`PF00014`, `4003337` or `4.10.410.10`): to select those structurally-resolved PDB structures that have been annotated as containing a SP.
@@ -119,10 +119,10 @@ mkdir SP_model | cd ./SP_model | mkdir datasets | cd datasets
 gunzip uniprot_prel_pos_set.tsv.gz 
 gunzip uniprot_prel_neg_set.tsv.gz
 ```
-### 1.2 Quality checks
+## 1.2 Quality checks
 Positive and Negative raw data retrieved in the previous step suffer from biases that must be corrected with a proper preprocessing procedure. Specifically, we have to filter out missclassified proteins, inadequate sequences and redundant proteins.
 
-#### 1.2.1 Filtering
+### 1.2.1 Filtering
 From the preliminary Positive set, the entries with a non-defined signal peptide (marked with a "?" symbol) and the ones with a peptide smaller than 13 residues have to be removed, as the length of the cleavage site of a signal peptide is 13 residues. From the preliminary Negative set, entries with a subcellular location in the Endoplasmic Reticulum, Golgi Apparatus, Lysosome or secreted have to be removed, as signal peptides can be found in these organelles and have this property.
 
 ```
@@ -138,10 +138,10 @@ grep -v 'Entry' uniprot_pos_set.tsv | cut -f 1 >uniprot_pos_set_ID.txt
 ```
 After this step, the **cleaned positive set** contained 2942 entries and the **cleaned negative set** 30011.
 
-#### 1.2.2 Retrieve FASTA sequences
+### 1.2.2 Retrieve FASTA sequences
 Now, extract the Uniprot IDs from these files and use them to retrieve the FASTA files with the `UniProt ID mapping tool`. Download and save the data in the same folder. This step is necessary to remove redundant proteins with MMseq2.
 
-#### 1.2.3 Remove Redundancy
+### 1.2.3 Remove Redundancy
 The query search procedure from SwissProt ensures the fetching of all proteins with the desired features; hence, the chance of having proteins with similar or identical sequences is very high. This leads to a potential redundancy bias that can harm the creation of predictors. To ensure the absence of redundancy in the Positive and Negative sets, the **MMSeqs2** can be used to cluster proteins of each set and extract representatives. 
 MMSeq2 (Many-against-Many sequence searching) is a software suite to search and cluster protein and nucleotide sequence sets. A single run produces many files, among which two are important to us: `cluster results_rep_seq.fasta`, a FASTA file containing all the representative sequences, one for each found cluster, and `cluster-results_cluster.tsv`, reporting the IDs of each sequence and their cluster’s representatives. Here the commands I used:
 ```
@@ -162,12 +162,12 @@ grep '^>' mmseq_neg_set_rep_seq.fasta | cut -d '|' -f 2 | sort -R > mmseq_neg_se
 ```
 At the end of this step, my positive set contains 1093 IDs and the negative 9523 IDs.
 
-## 2. Training and Benchmarking sets
+# 2. Training and Benchmarking sets
 The data processing allows us to construct an unbiased and well balanced **Training set** and a **Benchmarking set**.
 - Training set: it is used to train the methods, optimize model hyperparameters and perform Cross-Validation experiments.
 - Benchmarking set: the **holdout data set** is used to test the generalization performance of the different models.
 
-### 2.1 80/20 split
+## 2.1 80/20 split
 The proportion of the examples contained in the Training and Benchmarking set should be 80:20. In practice, 80% of the positive set IDs and negative set IDs have to go in the Training set and 20% in the Benchmarking set.
 
 ```
@@ -182,7 +182,7 @@ cat training_set_pos.txt training_set_neg.txt > training_set.txt
 
 The Training and Benchmarking sets contain, respectively, 8492 and 2124 entries.
 
-### 2.2 Retrieve metadata
+## 2.2 Retrieve metadata
 The newly created datasets in contain just the UniProt IDs. The UniProt ID Mapping Tool is necessary now to retrieve numerous useful metadata, that we will use to do statistical analysis, downloadable in a `.tsv` format:
 - Signal peptide length
 - Protein length
@@ -216,7 +216,7 @@ cat benchmarking_set_parsed_negc.tsv benchmarking_set_parsed_posc.tsv > benchmar
 cat training_set_parsed_negc.tsv training_set_parsed_posc.tsv > training_set_parsed_totc.tsv
 ```
 
-### 2.3. Cross-validation sets
+## 2.3. Cross-validation sets
 A **Cross-Validation** procedure is crucial to evaluating the model design and avoiding potential biases such as overfitting; validating the model on a limited amount of data allows for a less optimistic estimate of how well the model will generalize, also helps in the choice of the hyperparameters.
 
 To maintain the correct proportion of negative and positive entries in each cross-validation set, the Training set is divided into a **parsed Positive Training set** (874 entries) and a **parsed Negative Training set** (7618 entries). Each of the two sets is then divided into 5 subsets, leading to **5 Cross Validation positive subsets** and **5 Cross Validation negative subsets**. The positive and negative cross-validation subsets are then paired and concatenated into **5 cross-validation sets**, containing CV0, CV1, CV2, and CV3 with 1699 entries and CV4 with 1697 entries, respectively.
@@ -231,7 +231,7 @@ for i in {0..4}; do cat CV_pos_$i CV_neg_$i > CV$(($i+1)).txt; done     #CV$(($i
 cd .. | mkdir ./SETs | cp ../datasets/training_set_parsed_posc.tsv ./SETs |  cp ../datasets/benchmarking_set_parsed_totc.tsv ./SETs 
 ```
 
-## 3. (OPTIONAL) Statistical analysis of the datasets
+# 3. (OPTIONAL) Statistical analysis of the datasets
 To visualize your data and help yourself contextualize the problem, as well as detect unforseen bias, I suggest you do a statistical analysis of the data. As we dowloaded the metadata from UniProt, we are able to conduct the following analysis. The details and explanations of each analysis can be appreciated in the final report and the supplementary material () while the commands used for the analysis in the Jupyter Notebook (). Here I will just show some of the results.
 
 - Signal peptide length distribution. The length has been normalized to a log10 scale.
@@ -244,7 +244,7 @@ To visualize your data and help yourself contextualize the problem, as well as d
 ![image](https://github.com/user-attachments/assets/1eee1e78-8652-44c5-a315-e0d903e3de62)
 ![image](https://github.com/user-attachments/assets/01959d65-d1c4-42ed-9ae4-9e57f8dab2ed)
 
-## 4. Von Heijne method
+# 4. Von Heijne method
 The first method I decided to implement is the Von Heijne method. Briefly, the algorithm workflow is the following: 
 
 1. Starting from a set of aligned sequences, a position-specific probability matrix (PSPM) is computed. This matrix stores the frequency of each residue type at each position; the number of rows is equal to the number of different characters in the alphabet (20 for proteins) and the number of columns is equal to the length of the motif. Given a set S of N aligned sequences of length L, the PSPM (M) is computed as follows:
@@ -266,7 +266,7 @@ Given any piece of sequence X = (x1,..,xL) of length L, one can compute the log-
 
 ![image](https://github.com/user-attachments/assets/671cad53-bf21-4ed5-ae70-40e4ff3573f0)
 
-### 4.1 Implementation
+## 4.1 Implementation
 First, you should create a conda environment with all the libraries we need, and use it for both the Von Heijne and the SVM implementations:
 ```
 conda create --name <YOUR_ENV> pandas numpy matplotlib seaborn scikit-learn
@@ -286,7 +286,7 @@ wget
 mkdir ./PSWMs
 ```
 
-#### 4.1.1 Training, Cross-Validation and Threshold Selection
+### 4.1.1 Training, Cross-Validation and Threshold Selection
 During this step, as previously explained, 5 runs have to be done: in each run, 3 positive cross-validation sets are used for training and 1 whole CV set for testing. 
 1. Training: Three of the five cross-validation positive sets are alternately used to compute a PSWM matrix for model training. First, the cleavage motifs are extracted from the sequences (position -13 to +2 relative to the signal peptide length). From this stacked alignment and the SwissProt distribution, the PSPM and the PSWM are computed. For each run, the PSWM is stored in a TXT file, resulting in a total of five PSWMs.
 2. Cross Validation: The first 90 N-terminal positions from the protein sequences in the validation subset are extracted. A sliding window approach calculates the score (log likelihood) of every 15-residue subsequence for each sequence (e.g., subsequence 1-15, subsequence 2-16, etc.). The highest positional score for each sequence is saved as the global score. Precision and recall values are computed using the precision-recall curve and are used to calculate the F1 score. The optimal threshold of the model is determined as the one associated with the best F1 score.
@@ -298,7 +298,7 @@ Finally, you can save a TSV document containing all the results from each run.
 rm training_predictions.tsv | for i in {0..4}; do python ./vH_train.py ./CVs/CV_pos_$((($i+2)%5)) ./CVs/CV_pos_$((($i+3)%5)) ./CVs/CV_pos_$((($i+4)%5)) PSWM_$((($i+2)%5))$((($i+3)%5))$((($i+4)%5)) ; python ./vH_predict.py ./CVs/CV$((($i+1)%5)).txt PSWM_$((($i+2)%5))$((($i+3)%5))$((($i+4)%5)) ./CVs/CV$i.txt ; done
 ```
 
-#### 4.1.2. Prediction
+### 4.1.2. Prediction
 After obtaining the results and metrics for each model, average the thresholds used in each run to calculate an average threshold, which then you can use to classify proteins in a final model trained on the entire positive Training set and tested on the Benchmarking set.
 
 - Training: All positive examples from the Training set are used to train a final model. The cleavage sites are extracted, and the PSPM and PSWM are computed as described previously.
@@ -309,10 +309,10 @@ After obtaining the results and metrics for each model, average the thresholds u
 rm benchmarking_results.tsv | rm predicted_vs_true.tsv | python ./vH_test.py ./SETs/training_set_parsed_posc.tsv ./SETs/benchmarking_set_parsed_totc.tsv
 ```
 
-## 5. Support Vector Machine
+# 5. Support Vector Machine
 Please refer to the report for a detailed explanation of how SVMs work. Here, I'm going to just report the workflow.
 
-### 5.1 Implementation
+## 5.1 Implementation
 To apply this machine learning method and create a support vector classifier (SVC) for signal peptide prediction, I conducted the following steps :
 
 1. Feature Extraction and Input Encoding: Discriminatory features are selected and encoded in a suitable format for the SVM algorithm.
@@ -324,7 +324,7 @@ This method is implemented in Python using the Scikit Learn library, a machine-l
 - γ parameter: It determines how far the influence of a single training example reaches during transformation, acting as the inverse of the radius of influence of the support vectors. The model’s behaviour is highly sensitive to γ; a large γ restricts the area of influence to the support vector itself, risking overfitting, while a very small γ constrains the model too much, limiting its ability to capture data complexity.
 - C parameter: This parameter balances the correct classification of training examples with the maximization of the decision function's margin. A larger C allows for a smaller margin if it improves the correct classification of training points. In comparison, a lower C encourages a larger margin and simpler decision function at the cost of training accuracy.
 
-#### 5.1.1 Feature Extraction and Input Encoding
+### 5.1.1 Feature Extraction and Input Encoding
 An SVM requires input examples in the form of D-dimensional vectors. The dimensions of such vectors are equal to the data’s number of features. To optimally design the SVC, it is crucial to first define a set of discriminatory features for the proteins (the positive and negative examples) and encode them in the proper format for the algorithm. Therefore, the discriminatory features I choose are:
 - Aminoacidic composition (C): as we have seen in statistical analysis, the frequency of some residues in signal peptides differs from the background SwissProt distribution.
 - Hydrophobicity(HP): as we have seen, hydrophobic residues are more abundant in signal peptides. Hydrophobicity has been calculated using the Kyte & Dolittle scale (Kyte and Doolittle, 1982).
@@ -344,3 +344,43 @@ For each value of K, all features are extracted and scaled from 0 to 1 for all p
 
 Storing the feature extraction results in this file format allows for easy input encoding, as columns can be selected for different feature combinations. The TSV files can also be easily transformed into pandas data frames and Numpy arrays. All the different combinations of features and hyperparameters are used to train the SVC.
 
+### 5.1.2 Training, validation and testing
+In this phase, numerous models are trained on 5 different combinations of 3 Cross Validation sets, considering different combinations of extracted features and hyperparameters for each. A grid search procedure is defined to combine the different hyperparameters. In a grid search procedure, a set of possible values for each hyperparameter is defined, and all possible combinations are tested for each CV run. The models are tested on a validation set, and the combination achieving the highest performance on the set is selected as the optimal one for that specific CV run, and fixed for testing. The final value of each hyperparameter is the one that is most frequently selected during Cross Validation.
+
+The range of possible values for the hyperparameters for the RBF Kernel are:
+
+- K = 20, 21, 22, 23, 24
+- C = 1, 2, 4, 8
+- γ = 0.5, 1, 2, "scale"
+Considering all the hyperparameter combinations, the 8 possible discriminatory feature combinations, and 5 different combinations of Cross Validation sets, the models trained with this method are 3200. Considering a single feature combination, the models are 400. Considering a single Cross Validation set combination, the models are 80; the computation of 80 models defines a single run.
+
+As done before with the Von Heijne algorithm, the Cross Validation sets (this time the whole CV sets, not just the positives) are alternated to train, validate, and test. Data from 3 sets is used for training, in accordance with the hyperparameters selected in the grid search; 1 set is used for validation to choose the best hyperparameters, and 1 set is used for testing to evaluate performance.
+
+Each of the 80 models created in a run is tested on the validation set, the performance is stored temporarily, and the model that obtains the best MCC (Equation 23) is saved (hence, the hyperparameters are stored). This model is then tested on the testing set, and the performance is saved. For each combination of discriminatory features, 5 runs are performed. To obtain the best model for the combination, the MCC of the 5 models is averaged, and the most frequent hyperparameters are selected.
+
+In the end, a TSV document containing the best model’s performance for each feature combination is created.
+
+### 5.1.3 Prediction
+To train the final model, the combination of features that led to the model with the best performance and its hyperparameters are chosen. Taking these settings, a final model is created, trained on the Training set (hence, trained on all the CV sets), and tested on the Benchmarking set (encoded in the same way). The performance is then stored in a file.
+
+# 6 Performance evaluation
+
+Standard sets of metrics for performance evaluation are typically chosen to evaluate binary classifiers, such as the one created with the Von Heijne algorithm and the machine learning SVM algorithm. These metrics are useful both for identifying the best model and for uncovering potential issues in the design of the model itself. These metrics are based on the computation of the so-called confusion matrix. In this 2x2 matrix, one dimension represents the observed class (positive or negative) and the other represents the predicted class (positive or negative). This defines four categories of data:
+
+- True Positives (TP): Positive examples that have been classified as positives.
+- True Negatives (TN): Negative examples that have been classified as negatives.
+- False Negatives (FN): Positive examples that have been classified as negatives.
+- False Positives (FP): Negative examples that have been classified as positives.
+
+From these values, various metrics can be computed. Below is a list of the metrics used in this experiment:
+
+- Matthew correlation coefficient (MCC). It is used to measure the difference between the predicted values and the actual values. It is a well balanced metric that ultimately tells how good the model is.
+- Accuracy (ACC). It computes the proportion of correct predictions among the total number of predictions.
+- Precision. It is used to compute the ratio between the True Positives and the set of all the entries predicted as positives.
+- Recall. It is used to compute the ratio between the True Positives and the set of all that belong to the positive class.
+-   F1 score. It is the harmonic mean of Precision and Recall, which balances Precision and Recall in binary classification. It is a metric used to evaluate the goodness of the method. Compared to the MCC score, it suffers more from class imbalance. 
+-  Standard error. It is a measure for telling how much a certain statistic differs in the different runs.
+-  ROC curve and Area undert the ROC curve (AUC). A ROC curve is a graphical plot that illustrates the performance of a binary classifier model at varying threshold values. It plots the true positive rate  against the false positive rate. AUC measures the entire two-dimensional area underneath the entire ROC curve from (0,0) to (1,1); briefly, when given one randomly selected positive instance and one randomly selected negative instance, AUC is the probability that the classifier will be able to tell which one is which.
+
+# 7 Results and Conclusion
+All the results and a detailed explanation of them can be found in the final report. In conclusion, the results unequivocally show that the SVC, the support vector classifier, leads to better overall performance compared to the Von Heijne method. This can be explained by the nature of machine learning methods, which are generally more robust than algorithmic ones. Indeed, in the experiment, the SVM method has been used to generate a lot of different models starting from different input features, settings, and sets. Moreover, SVM allows for inputting large sets of discriminatory features with respect to the Von Heijne algorithm.
