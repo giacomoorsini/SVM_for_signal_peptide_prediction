@@ -30,8 +30,15 @@ Written by Giacomo Orsini.
     - [2.2. Retrieve metadata](#22-retrieve-metadata)
     - [2.3. Cross-validation sets](#23-cross-validation-sets) 
   - [3. (OPTIONAL) Statistical analysis of the datasets](#3-optional-statistical-analysis-of-the-dataset)
-  - [4. The Von Heigne method](#4-von-heijne-method)
+  - [4. The Von Heijne method](#4-von-heijne-method)
     - [4.1. Implementation](#41-implementation)
+      - [4.1.1. Training, Cross-Validation and Threshold Selection](#411-training-crossvalidation-and-threshold-selection)
+      - [4.1.2. Prediction](#412-prediction)
+    - [5. Support Vector Machine](#5-support-vector-machine)
+      - [5.1. Implementation](#51-implementation)
+        - [5.1.1. Feature Extraction and Input Encoding](#511-feature-extraction-and-input-encoding)
+        - [5.1.2. Training, validation and testing](#512-training-validation-and-testing)
+        - [5.1.3. Prediction](#512-prediction)
     - [3.2. Cross-validation and Testing sets](#32-cross-validation-and-testing-sets)
     - [3.3. Model evaluation](#33-model-evaluation)
 
@@ -292,20 +299,15 @@ Then, you can organize the workflow in the following phases:
 - **Training, Cross Validation, and Threshold Selection**: In 5 different runs, you use 3 cross-validation sets to compute a PSWM for model training. For each run, you test the model on a validation set to extract an optimal threshold, which you then use to discriminate positive and negative proteins in a final testing procedure, where you evaluate the performance.
 - **Prediction**: You calculate the average of the thresholds obtained from each of the 5 runs. Then, you perform a new training procedure using all the positive examples from the Training set. You test the newly generated PSWM on the Benchmarking set, applying the average threshold to discriminate positives and negatives. Finally, you evaluate the performance of the final model and store the results in a file.
 
-I prepared specific python and bash scripts that can be found at:
+I prepared specific python and bash scripts that can be found at `./vonHeijne/vH-predict.py`, `./vonHeijne/vH-train.py` and `./vonHeijne/vH-test.py`:
 
-```
-#dowload the python scripts and put them in the VH folder
-wget 
-#create a directory to store intermediate results
-mkdir ./PSWMs
-```
 
 ### 4.1.1 Training, Cross-Validation and Threshold Selection
 During this step, as previously explained, 5 runs have to be done: in each run, 3 positive cross-validation sets are used for training and 1 whole CV set for testing. 
-1. Training: Three of the five cross-validation positive sets are alternately used to compute a PSWM matrix for model training. First, the cleavage motifs are extracted from the sequences (position -13 to +2 relative to the signal peptide length). From this stacked alignment and the SwissProt distribution, the PSPM and the PSWM are computed. For each run, the PSWM is stored in a TXT file, resulting in a total of five PSWMs.
-2. Cross Validation: The first 90 N-terminal positions from the protein sequences in the validation subset are extracted. A sliding window approach calculates the score (log likelihood) of every 15-residue subsequence for each sequence (e.g., subsequence 1-15, subsequence 2-16, etc.). The highest positional score for each sequence is saved as the global score. Precision and recall values are computed using the precision-recall curve and are used to calculate the F1 score. The optimal threshold of the model is determined as the one associated with the best F1 score.
-3. Testing: The first 90 N-terminal positions from the protein sequences in the validation subset are extracted, and the score is calculated using a sliding window approach on 15-residue subsequences, recording the highest score for each sequence. If the score is higher than the optimal threshold found in the previous step, the protein is predicted as positive (1); if lower, as negative (0). Using the lists of true and predicted classes, each model’s performance is evaluated with different metrics.
+
+1. **Training**: Three of the five cross-validation positive sets are alternately used to compute a PSWM matrix for model training. First, the cleavage motifs are extracted from the sequences (position -13 to +2 relative to the signal peptide length). From this stacked alignment and the SwissProt distribution, the PSPM and the PSWM are computed. For each run, the PSWM is stored in a TXT file, resulting in a total of five PSWMs (stored at `./vonHeijne/PSWMs/`. 
+2. **Cross Validation**: The first 90 N-terminal positions from the protein sequences in the validation subset are extracted. A sliding window approach calculates the score (log-likelihood) of every 15-residue subsequence for each sequence (e.g., subsequence 1-15, subsequence 2-16, etc.). The highest positional score for each sequence is saved as the global score. Precision and recall values are computed using the precision-recall curve and are used to calculate the F1 score. The optimal threshold of the model is determined as the one associated with the best F1 score.
+3. **Testing**: The first 90 N-terminal positions from the protein sequences in the validation subset are extracted, and the score is calculated using a sliding window approach on 15-residue subsequences, recording the highest score for each sequence. If the score is higher than the optimal threshold found in the previous step, the protein is predicted as positive (1); if lower, as negative (0). Using the lists of true and predicted classes, each model’s performance is evaluated with different metrics.
 Finally, you can save a TSV document containing all the results from each run.
 
 ```
@@ -330,44 +332,53 @@ Please refer to the report for a detailed explanation of how SVMs work. Here, I'
 ## 5.1 Implementation
 To apply this machine learning method and create a support vector classifier (SVC) for signal peptide prediction, I conducted the following steps :
 
-1. Feature Extraction and Input Encoding: Discriminatory features are selected and encoded in a suitable format for the SVM algorithm.
-2. Training, Validation, and Testing: A grid search for hyperparameters trains multiple models on Cross Validation sets, tests them on a validation set to select the best-performing model, and evaluates it on a testing set.
-3.Prediction: With the hyperparameters of the best model chosen, a final model is trained on the Training set and tested on the Benchmarking set.
+1. **Feature Extraction and Input Encoding**: Discriminatory features are selected and encoded in a suitable format for the SVM algorithm.
+2. **Training, validation and testing**: A grid search for hyperparameters trains multiple models on cross-validation sets, tests them on a validation set to select the best-performing model, and evaluates it on a testing set.
+3. **Prediction**: With the hyperparameters of the best model chosen, a final model is trained on the Training set and tested on the Benchmarking set.
 
-This method is implemented in Python using the Scikit Learn library, a machine-learning library based on Numpy, Scipy, and Matplotlib. The chosen kernel type for the classifier is the RBF Kernel, which requires defining two hyperparameters:
+This method is implemented in Python using the `Scikit Learn` library, a machine-learning library based on Numpy, Scipy, and Matplotlib. The chosen kernel type for the classifier is the `RBF Kernel`, which requires defining two hyperparameters:
 
-- γ parameter: It determines how far the influence of a single training example reaches during transformation, acting as the inverse of the radius of influence of the support vectors. The model’s behaviour is highly sensitive to γ; a large γ restricts the area of influence to the support vector itself, risking overfitting, while a very small γ constrains the model too much, limiting its ability to capture data complexity.
-- C parameter: This parameter balances the correct classification of training examples with the maximization of the decision function's margin. A larger C allows for a smaller margin if it improves the correct classification of training points. In comparison, a lower C encourages a larger margin and simpler decision function at the cost of training accuracy.
+- **γ parameter**: It determines how far the influence of a single training example reaches during transformation, acting as the inverse of the radius of influence of the support vectors. The model’s behaviour is highly sensitive to γ; a large γ restricts the area of influence to the support vector itself, risking overfitting, while a very small γ constrains the model too much, limiting its ability to capture data complexity.
+- **C parameter**: This parameter balances the correct classification of training examples with the maximization of the decision function's margin. A larger C allows for a smaller margin if it improves the correct classification of training points. In comparison, a lower C encourages a larger margin and simpler decision function at the cost of training accuracy.
+
+You can access the scripts I used to implement the SVM model at `./SVM/SVM_feature_encoding.py`, `./SVM/SVM_model.py`, `./SVM/SVM_tester.py`. They are intended to be used with the following commands:
+
+```
+rm ./encoded/* | python SVM_feature_encoding.py 
+rm ./models/* | python SVM_model.py
+python SVM_tester.py
+```
 
 ### 5.1.1 Feature Extraction and Input Encoding
-An SVM requires input examples in the form of D-dimensional vectors. The dimensions of such vectors are equal to the data’s number of features. To optimally design the SVC, it is crucial to first define a set of discriminatory features for the proteins (the positive and negative examples) and encode them in the proper format for the algorithm. Therefore, the discriminatory features I choose are:
-- Aminoacidic composition (C): as we have seen in statistical analysis, the frequency of some residues in signal peptides differs from the background SwissProt distribution.
-- Hydrophobicity(HP): as we have seen, hydrophobic residues are more abundant in signal peptides. Hydrophobicity has been calculated using the Kyte & Dolittle scale (Kyte and Doolittle, 1982).
-- Charge (CH): as we have seen, in the signal peptides’ N-terminal
+An SVM requires input examples in the form of D-dimensional vectors. The dimensions of such vectors are equal to the data’s number of features. To optimally design the SVC, it is crucial first to define a set of discriminatory features for the proteins (the positive and negative examples) and encode them in the proper format for the algorithm. Therefore, the discriminatory features I choose are:
+- **Aminoacidic composition** (C): as we have seen in statistical analysis, the frequency of some residues in signal peptides differs from the background SwissProt distribution.
+- **Hydrophobicity** (HP): as we have seen, hydrophobic residues are more abundant in signal peptides. Hydrophobicity has been calculated using the Kyte & Dolittle scale (Kyte and Doolittle, 1982).
+- **Charge** (CH): as we have seen, in the signal peptides’ N-terminal
  region, a positively charged region is usually conserved.
-- α-helix-tendency (AH): as the hydrophobic amino acids tend to form a single α-helix, this feature may be discriminatory for signal peptides. For the calculation of α-helix tendency, the Chou and Fasman scale has been used (Chou and Fasman, 1978).
+- **α-helix-tendency** (AH): as the hydrophobic amino acids tend to form a single α-helix, this feature may be discriminatory for signal peptides. For the calculation of α-helix tendency, the Chou and Fasman scale has been used (Chou and Fasman, 1978).
 
-A "K" number of residues is selected for each cross-validation set sequence, starting from the N-termini. For each of the aforementioned features, except for the composition, the score for each residue in subsequences of length K is computed using a sliding window approach. The sliding window is set to 5 residues (7 for the α-helix tendency) to incorporate the effect of surrounding residues on the score of each residue. The computations are based on the feature scales retrieved from the Expasy database. After calculating the scores for each residue, the following measurements are computed for each subsequence:
+A "K" number of residues is selected for each cross-validation set sequence, starting from the N-termini. For each of the features mentioned above, except for the composition, the score for each residue in subsequences of length K is computed using a sliding window approach. The sliding window is set to 5 residues (7 for the α-helix tendency) to incorporate the effect of surrounding residues on the score of each residue. The computations are based on the feature scales retrieved from the Expasy database. After calculating the scores for each residue, the following measurements are computed for each subsequence:
 
-- Maximal value
-- Average value
-- Position of the maximal value in the sequence
+- **Maximal value**
+- **Average value**
+- **Position of the maximal value in the sequence**
 
-These values represent the final set of extracted features from the hydrophobicity, charge, and α-helix tendency discriminatory features. The length of the subsequences, K, is a hyperparameter, chosen to range from 20 to 24 residues, as this range represents the average signal peptide length.
+These values represent the final set of extracted features from the hydrophobicity, charge, and α-helix tendency discriminatory features. The **length of the subsequences**, K, is a hyperparameter, chosen to range from 20 to 24 residues, as this range represents the average signal peptide length.
 
-For each value of K, all features are extracted and scaled from 0 to 1 for all proteins in each cross-validation set and saved in TSV files. This results in a total of 25 TSV files (one for each CV and all K values). Each TSV file contains protein codes as rows and features as columns, in the following order: the frequency of each amino acid, the average value, maximum value, position of maximum value of the discriminatory features (hydrophobicity, charge, and helix tendency), and finally, the class of the proteins.
+For each value of K, all features are extracted and scaled from 0 to 1 for all proteins in each cross-validation set and saved in TSV files. This results in a total of 25 TSV files (one for each CV and all K values, stored at `./SVM/encoded/`). Each TSV file contains protein codes as rows and features as columns, in the following order: the frequency of each amino acid, the average value, maximum value, position of maximum value of the discriminatory features (hydrophobicity, charge, and helix tendency), and finally, the class of the proteins.
 
 Storing the feature extraction results in this file format allows for easy input encoding, as columns can be selected for different feature combinations. The TSV files can also be easily transformed into pandas data frames and Numpy arrays. All the different combinations of features and hyperparameters are used to train the SVC.
 
 ### 5.1.2 Training, validation and testing
-In this phase, numerous models are trained on 5 different combinations of 3 Cross Validation sets, considering different combinations of extracted features and hyperparameters for each. A grid search procedure is defined to combine the different hyperparameters. In a grid search procedure, a set of possible values for each hyperparameter is defined, and all possible combinations are tested for each CV run. The models are tested on a validation set, and the combination achieving the highest performance on the set is selected as the optimal one for that specific CV run, and fixed for testing. The final value of each hyperparameter is the one that is most frequently selected during Cross Validation.
+In this phase, numerous models are trained on 5 different combinations of 3 Cross Validation sets, considering different combinations of extracted features and hyperparameters for each. A **grid search procedure** is defined to combine the different hyperparameters. In a grid search procedure, a set of possible values for each hyperparameter is defined, and all possible combinations are tested for each CV run. The models are tested on a validation set, and the combination achieving the highest performance on the set is selected as the optimal one for that specific CV run, and fixed for testing. The final value of each hyperparameter is the one that is most frequently selected during Cross-Validation.
 
 The range of possible values for the hyperparameters for the RBF Kernel are:
 
-- K = 20, 21, 22, 23, 24
-- C = 1, 2, 4, 8
-- γ = 0.5, 1, 2, "scale"
-Considering all the hyperparameter combinations, the 8 possible discriminatory feature combinations, and 5 different combinations of Cross Validation sets, the models trained with this method are 3200. Considering a single feature combination, the models are 400. Considering a single Cross Validation set combination, the models are 80; the computation of 80 models defines a single run.
+- `K` = 20, 21, 22, 23, 24
+- `C` = 1, 2, 4, 8
+- `γ` = 0.5, 1, 2, "scale"
+
+Considering all the hyperparameter combinations, the 8 possible discriminatory feature combinations, and 5 different combinations of Cross-Validation sets, the models trained with this method are 3200. Considering a single feature combination, the models are 400. Considering a single cross-validation set combination, the models are 80; the computation of 80 models defines a single run.
 
 As done before with the Von Heijne algorithm, the Cross Validation sets (this time the whole CV sets, not just the positives) are alternated to train, validate, and test. Data from 3 sets is used for training, in accordance with the hyperparameters selected in the grid search; 1 set is used for validation to choose the best hyperparameters, and 1 set is used for testing to evaluate performance.
 
@@ -389,13 +400,13 @@ Standard sets of metrics for performance evaluation are typically chosen to eval
 
 From these values, various metrics can be computed. Below is a list of the metrics used in this experiment:
 
-- Matthew correlation coefficient (MCC). It is used to measure the difference between the predicted values and the actual values. It is a well balanced metric that ultimately tells how good the model is.
-- Accuracy (ACC). It computes the proportion of correct predictions among the total number of predictions.
-- Precision. It is used to compute the ratio between the True Positives and the set of all the entries predicted as positives.
-- Recall. It is used to compute the ratio between the True Positives and the set of all that belong to the positive class.
--   F1 score. It is the harmonic mean of Precision and Recall, which balances Precision and Recall in binary classification. It is a metric used to evaluate the goodness of the method. Compared to the MCC score, it suffers more from class imbalance. 
--  Standard error. It is a measure for telling how much a certain statistic differs in the different runs.
--  ROC curve and Area undert the ROC curve (AUC). A ROC curve is a graphical plot that illustrates the performance of a binary classifier model at varying threshold values. It plots the true positive rate  against the false positive rate. AUC measures the entire two-dimensional area underneath the entire ROC curve from (0,0) to (1,1); briefly, when given one randomly selected positive instance and one randomly selected negative instance, AUC is the probability that the classifier will be able to tell which one is which.
+- **Matthew correlation coefficient (MCC)**. It is used to measure the difference between the predicted values and the actual values. It is a well balanced metric that ultimately tells how good the model is.
+- **Accuracy (ACC)**. It computes the proportion of correct predictions among the total number of predictions.
+- **Precision**. It is used to compute the ratio between the True Positives and the set of all the entries predicted as positives.
+- **Recall**. It is used to compute the ratio between the True Positives and the set of all that belong to the positive class.
+- **F1 score**. It is the harmonic mean of Precision and Recall, which balances Precision and Recall in binary classification. It is a metric used to evaluate the goodness of the method. Compared to the MCC score, it suffers more from class imbalance. 
+-  **Standard error**. It is a measure for telling how much a certain statistic differs in the different runs.
+-  **ROC curve and Area undert the ROC curve (AUC)**. A ROC curve is a graphical plot that illustrates the performance of a binary classifier model at varying threshold values. It plots the true positive rate  against the false positive rate. AUC measures the entire two-dimensional area underneath the entire ROC curve from (0,0) to (1,1); briefly, when given one randomly selected positive instance and one randomly selected negative instance, AUC is the probability that the classifier will be able to tell which one is which.
 
 # 7 Results and Conclusion
 All the results and a detailed explanation of them can be found in the final report. In conclusion, the results unequivocally show that the SVC, the support vector classifier, leads to better overall performance compared to the Von Heijne method. This can be explained by the nature of machine learning methods, which are generally more robust than algorithmic ones. Indeed, in the experiment, the SVM method has been used to generate a lot of different models starting from different input features, settings, and sets. Moreover, SVM allows for inputting large sets of discriminatory features with respect to the Von Heijne algorithm.
