@@ -7,30 +7,40 @@ For details, see the written report (`project-lb2-giacomo_orsini.pdf`).
 Written by Giacomo Orsini.
 
 # Abstract
-Signal Peptides (SP) play a crucial role in the secretory pathway of cells. In-silico prediction of signal peptides offers a valuable solution to the biological problem of identifying proteins implied in this pathway, a significant task for scientific efforts such as drug discovery. Many computational methods for prediction have been proposed in the literature, with different features and performances. In the hereby presented experiment, two predictors for signal peptides were constructed using the Von Heijne algorithm and the machine learning method of Support Vector Machine. The models were trained and tested using datasets of reviewed proteins, containing examples of both signal peptide-endowed proteins and proteins without it. A Cross-Validation step has been added in both workflows. The performances of the two final models were compared, showing that the SVM model is a better classifier overall than the Von Heijne model.
+**Signal Peptides** (SP) play a crucial role in the secretory pathway of cells. In-silico **prediction of signal peptides** offers a valuable solution to the biological problem of identifying proteins implied in this pathway, a significant task for scientific efforts such as drug discovery. Many computational methods for prediction have been proposed in the literature, with different features and performances. In the hereby presented experiment, two predictors for signal peptides were constructed using the **Von Heijne algorithm** and the machine learning method of **Support Vector Machine**. The models were trained and tested using datasets of reviewed proteins, containing examples of both signal peptide-endowed proteins and proteins without it. A Cross-Validation step has been added in both workflows. The performances of the two final models were compared, showing that the SVM model is a better classifier overall than the Von Heijne model.
 
 # Index
 **Table of Contents**
 - [Introduction](#introduction)
   - [Signal peptides](#signal-peptides)
-  - [Methods for signal peptides prediction](#signal-peptide-prediction)
+  - [Signal peptide prediction](#signal-peptide-prediction)
+    - [Von Heijne Algorithm](#von-heijne-algorithm)
+    - [Neural Newtroks](#neural-networks)
+    - [Support vector machines](#support-vector-machines)  
 - [Workflow](#workflow)
-  - [0. Requirements and databases](#0-requirements-and-databases)
-  - [1. Data collection and analysis](#1-data-collection-and-analysis)
-    - [1.1. PDB Search](#11-pdb-search)
-    - [1.2. Protein Alignment](#12-protein-alignment)
-  - [2. HMM Generation](#2-hmm-generation)
-    - [2.1. Train a HMM profile](#21-train-a-hmm-profile)
-    - [2.2. Training set](#22-training-set)
-  - [3. Method Testing](#3-method-testing)
-    - [3.1. Validation set](#31-validation-set)
+  - [0. Modules required](#0-modules-required)
+  - [1. Data collection and processing](#1-data-collection-and-processing)
+    - [1.1. Retrieve training and benchmarking datasets](#11-retrieve-training-and-benchmarking-datasets)
+    - [1.2. Quality checks](#12-quality-checks)
+      - [1.2.1 Filtering](#121-filtering)
+      - [1.2.2 Retrieve FASTA sequences](#122-retrieve-fasta-sequences)
+      - [1.2.3 Remove Redundancy](#123-remove-redundancy)
+  - [2. Training and Benchmarking sets](#2-training-and-benchmarking-set)
+    - [2.1. 80/20 split](#21-8020-split)
+    - [2.2. Retrieve metadata](#22-retrieve-metadata)
+    - [2.3. Cross-validation sets](#23-cross-validation-sets) 
+  - [3. (OPTIONAL) Statistical analysis of the datasets](#3-optional-statistical-analysis-of-the-dataset)
+  - [4. The Von Heigne method](#4-von-heijne-method)
+    - [4.1. Implementation](#41-implementation)
     - [3.2. Cross-validation and Testing sets](#32-cross-validation-and-testing-sets)
     - [3.3. Model evaluation](#33-model-evaluation)
 
 # Introduction
 
 ## Signal peptides
-**Signal peptides** (SP) play a crucial role in cellular processes, serving as guiding tags for proteins destined for secretion or integration into cellular membranes. These short amino acid sequences facilitate the accurate trafficking of proteins within cells, ensuring they reach their intended destinations. Immature proteins directed toward the cell secretory pathway (ER-Golgi-Membrane-Extracellular) are endowed with a signal sequence in the N-terminal region; the signal sequence is cleaved after the protein reaches its final destination. 5 types of signal peptides exist, depending on the signal peptidase that cleaves them and their pathways (SEC or TAT). Recognition of signal peptides is a crucial step for the characterization of protein function and subcellular localization, as well as for deciphering cellular pathways. Moreover, knowledge of protein localization allows the identification of potential protein interactors, providing insightful information for drug discovery. Despite their importance, it is challenging to determine whether unknown proteins have signal peptides due to the inherent characteristics of the SPs. These characteristics include the dissimilarities in domain properties, the absence of cleavage site conservation across proteins and species, and the resemblance of the hydrophobic core to other structures such as the transmembrane helix or the transit peptides.
+**Signal peptides** (SP) play a crucial role in cellular processes, serving as guiding tags for proteins destined for secretion or integration into cellular membranes. These short amino acid sequences facilitate the accurate trafficking of proteins within cells, ensuring they reach their intended destinations. Immature proteins directed toward the cell secretory pathway (ER-Golgi-Membrane-Extracellular) are endowed with the signal peptide in the N-terminal region; the signal sequence is cleaved after the protein reaches its final destination. 5 types of signal peptides exist, depending on the signal peptidase that cleaves them and their pathways (SEC or TAT). Recognition of signal peptides is a crucial step for the characterization of protein function and subcellular localization, as well as for deciphering cellular pathways. Moreover, knowledge of protein localization allows the identification of potential protein interactors, providing insightful information for drug discovery. 
+
+Despite their importance, it is challenging to determine whether unknown proteins have signal peptides due to the inherent characteristics of the SPs. These characteristics include the dissimilarities in domain properties, the absence of cleavage site conservation across proteins and species, and the resemblance of the hydrophobic core to other structures, such as the transmembrane helix or the transit peptides.
 
 The signal peptide has an **average length of 16-30 residues**. It has a modular structure comprising three separate regions with different properties: 
 - a **positively charged** region at the N-terminal (1-5 residues long)
@@ -44,7 +54,7 @@ The **cleavage site** allows for the cleavage of the signal peptide to make the 
 ## Signal peptide prediction
 Despite their biological importance, experimentally identifying signal peptides can be challenging and resource-intensive. This has led to the development of computational methods, which offer a more efficient and cost-effective approach, opening a new set of challenges. Available in-silico methods can be divided into three main classes:
 
-- **Homology-based approaches**. In these approaches, information is transferred from closely related sequences. They can be accurate but require a good template, experimentally studied.
+- **Homology-based approaches**. In these approaches, information is transferred from closely related sequences. They can be accurate but require a good template that has been experimentally studied.
 - **Algorithmic and probabilistic approaches**. A traditional algorithm takes some input and some logic in code and drums up the output. In this category, methods such as Hidden Markov Models and Weight matrix approaches can be found.
 - **Machine learning approaches**. A Machine Learning Algorithm takes an input and an output and gives the logic that connects them, which can then be used to work with new input to give one an output. Typical Machine learning methods are Artificial Neural Networks (including recent deep-learning methods), Decision trees and Random Forests, and Support Vector Machines.
 
@@ -53,7 +63,7 @@ The problem of signal peptide prediction (and more in general motives prediction
 ### Von Heijne Algorithm
 The first method specific for signal peptide prediction was introduced by Gunnar Von Heijne in 1983 (Von Heijne, 1983). The **Von Heijne method** was based on a reduced-alphabet weight matrix combined with a rule for narrowing the search region; only seven different weights at each position, corresponding to groups of amino acids (AAs) with similar properties, were estimated manually (rather than using automatic procedures). The matrix score aimed to recognize the location of the signal peptide (SP) cleavage site. The scores were computed for positions 12-20, counted from the beginning of the hydrophobic region (defined as the first quadruplet of AAs with at least three hydrophobic residues). In the first benchmark, the procedure correctly predicted 92% of sites on data used to estimate it, while on a later benchmark, the test performance was only 64% (a sign of overfitting).
 
-Since its first publication, the Von Heijne method was updated by introducing a more structured weight matrix (that uses log odds scores), pseudo counts to mitigate the sampling error (the fact that the model is constructed from a limited set of examples), and a longer window of residues for the search of the cleavage site (40-50 residues) (Von Heijne, 1986). This updated version of the method was used in the experiment (with a window of 90 residues).
+Since its first publication, the Von Heijne method was updated by introducing a more structured weight matrix (that uses log odds scores), pseudo counts to mitigate the sampling error (the fact that the model is constructed from a limited set of examples), and a longer window of residues for the search of the cleavage site (40-50 residues) (Von Heijne, 1986). This updated version of the method has been used in the experiment (with a window of 90 residues).
 
 ### Neural Networks
 After the increase of interest in this machine learning method in the 80s, **Neural Networks** (NN) have affirmed themselves as the most successful framework for predicting signal peptides (SPs) and their cleavage site. Early approaches used a shallow networks approach (few hidden layers): a fixed-size portion of the N-terminus (e.g., the first 20 residues) was given as input to the NN; a sliding window approach was implemented to scan both for the presence of the signal peptide and cleavage site position (identification and labelling). Tools that used this approach are **SignalP1-4** (Nielsen et al., 1997; Nielsen and Krogh, 1998; Bendtsen et al., 2004; Petersen et al., 2011) and **SPEPLip** (Fariselli et al., 2003).
@@ -81,9 +91,7 @@ The second method implemented has been the machine learning algorithm of Support
 5. Selection of the best set of features and creation of a final model, trained on the Training set and tested on the Benchmarking set.
 6. The final results, as well as the partial results of the two methods, have been compared. A standard set of metrics has been used for the performance evaluation. Finally, eventual misclassifications (False Negatives and False Positives) have been examined.
 
-The experiment has been designed as explained to answer two main questions: the biological question of signal peptide prediction, with the creation of a well-performing predictive model and the comparison of different models to find the best one.
-
-# 0. Requirements and used versions and releases
+# 0. Modules required
 To be able to conduct this project, download the MMseqs2 software from their [GitHub page](https://github.com/soedinglab/MMseqs2). 
 
 It is also necessary to download some Python packages: `pandas`, `Matplotlib`, `seaborn`, `NumPy`, `scikit-learn` and `Biopython`.
@@ -91,17 +99,17 @@ It is also necessary to download some Python packages: `pandas`, `Matplotlib`, `
 All UniProt searches were performed using **Release 2023_04**.
 
 # 1. Data collection and processing
-The goal of this first section is to retrieve two preliminary processing sets (Positive and Negative) from [UniProt](https://www.uniprot.org/)(Release 2023_04), filter them and split them into training (cross-validation) and benchmarking set. The creation of representative and unbiased datasets is the first step for every machine learning method and involves both data collection and data preprocessing.
+The goal of this first section is to retrieve two preliminary processing sets (Positive and Negative) from [UniProt](https://www.uniprot.org/)(Release 2023_04), filter them and split them into training (and further cross-validation) and benchmarking set. The creation of representative and unbiased datasets is the first step for every machine learning method and involves both data collection and data preprocessing.
 
-We’ll focus only on Eukaryotes, neglecting bacterial and archaea proteins.
+<u> Note: We’ll focus only on Eukaryotes, neglecting bacterial and archaea proteins. </u>
 
-## 1.1. Retrieve training and benchmarking datasets from UniProtKB
+## 1.1. Retrieve training and benchmarking datasets
 First, access the `Advanced search` section of the UniProt website and write the desired query to retrieve the proteins. In my case, I opted for these parameters:
 
-- Pfam identifier, SCOP2 lineage identifier, or CATH lineage identifier (`PF00014`, `4003337` or `4.10.410.10`): to select those structurally-resolved PDB structures that have been annotated as containing a SP.
+- `Pfam identifier`, `SCOP2 lineage identifier`, or `CATH lineage identifier` (`PF00014`, `4003337` or `4.10.410.10`): to select those structurally-resolved PDB structures that have been annotated as containing a SP.
 - Sequences with no mutations (`Polymer Entity Mutation Count=0`): wild-type versions of the protein, no mutants.
-- Resolution (`<= 3`).
-- Polymer Entity Sequence Length (`51 - 76` residues): size range of the Kunitz domains.
+- `Resolution` (`<= 3`).
+- `Polymer Entity Sequence Length` (`51 - 76` residues): size range of the signal peptides domains.
 
 This is the resulting query for the positive set: 
 ```
@@ -112,13 +120,17 @@ This is the resulting query for the negative set:
 negative: (reviewed:true) AND (taxonomy_id:2759) NOT (ft_signal:*) AND (length:[30 TO *]) AND ((cc_scl_term_exp:SL-0091) OR (cc_scl_term_exp:SL-0191) OR (cc_scl_term_exp:SL-0173) OR (cc_scl_term_exp:SL-0209) OR (cc_scl_term_exp:SL-0204) OR (cc_scl_term_exp:SL-0039))
 ```
 In my case, the **preliminary positive set** comprises 2969 entries, while the **preliminary negative set** 31619.
-Once the data are retrieved, we can download a perto in `.tsv` format and store them in a folder.
+
+Once the data are retrieved, we can download the data in `.tsv` format and store them in a folder.
 ```
 mkdir SP_model | cd ./SP_model | mkdir datasets | cd datasets
 
 gunzip uniprot_prel_pos_set.tsv.gz 
 gunzip uniprot_prel_neg_set.tsv.gz
 ```
+
+You can access these files in this GitHub repository at `./preprocessing/positive_set/uniprot_prel_pos_set.tsv` and `./preprocessing/negative_set/uniprot_prel_neg_set.tsv`.
+
 ## 1.2 Quality checks
 Positive and Negative raw data retrieved in the previous step suffer from biases that must be corrected with a proper preprocessing procedure. Specifically, we have to filter out missclassified proteins, inadequate sequences and redundant proteins.
 
@@ -136,11 +148,12 @@ grep -v -i 'endoplasmic\|golgi\|lysosome\|secreted' uniprot_prel_neg_set.tsv > u
 grep -v 'Entry' uniprot_neg_set.tsv | cut -f 1 >uniprot_neg_set_ID.txt
 grep -v 'Entry' uniprot_pos_set.tsv | cut -f 1 >uniprot_pos_set_ID.txt
 ```
-After this step, the **cleaned positive set** contained 2942 entries and the **cleaned negative set** 30011.
+After this step, the **cleaned positive set** contained 2942 entries and the **cleaned negative set** 30011. You can access these files in this GitHub repository at `./preprocessing/positive_set/uniprot_pos_set_ID.tsv` and `./preprocessing/negative_set/uniprot_neg_set_ID.tsv`.
 
 ### 1.2.2 Retrieve FASTA sequences
 Now, extract the Uniprot IDs from these files and use them to retrieve the FASTA files with the `UniProt ID mapping tool`. Download and save the data in the same folder. This step is necessary to remove redundant proteins with MMseq2.
-
+ You can access these files in this GitHub repository at `./preprocessing/positive_set/uniprot_pos_set.fasta` and `./preprocessing/negative_set/uniprot_neg_set.fasta`.
+ 
 ### 1.2.3 Remove Redundancy
 The query search procedure from SwissProt ensures the fetching of all proteins with the desired features; hence, the chance of having proteins with similar or identical sequences is very high. This leads to a potential redundancy bias that can harm the creation of predictors. To ensure the absence of redundancy in the Positive and Negative sets, the **MMSeqs2** can be used to cluster proteins of each set and extract representatives. 
 MMSeq2 (Many-against-Many sequence searching) is a software suite to search and cluster protein and nucleotide sequence sets. A single run produces many files, among which two are important to us: `cluster results_rep_seq.fasta`, a FASTA file containing all the representative sequences, one for each found cluster, and `cluster-results_cluster.tsv`, reporting the IDs of each sequence and their cluster’s representatives. Here the commands I used:
@@ -160,7 +173,7 @@ Now extract the IDs and randomize them to then create the training and benchmark
 grep '^>' mmseq_pos_set_rep_seq.fasta | cut -d '|' -f 2 | sort -R > mmseq_pos_set_ID_rdm.txt
 grep '^>' mmseq_neg_set_rep_seq.fasta | cut -d '|' -f 2 | sort -R > mmseq_neg_set_ID_rdm.txt
 ```
-At the end of this step, my positive set contains 1093 IDs and the negative 9523 IDs.
+At the end of this step, my positive set contains 1093 IDs and the negative 9523 IDs. You can access these and the intermediary files in this GitHub repository at `./preprocessing/positive_set/mmseq_pos_set_ID_rdm.txt` and `./preprocessing/negative_set/mmseq_neg_set_ID_rdm.txt`.
 
 # 2. Training and Benchmarking sets
 The data processing allows us to construct an unbiased and well balanced **Training set** and a **Benchmarking set**.
@@ -180,10 +193,10 @@ cat benchmarking_set_pos.txt benchmarking_set_neg.txt > benchmarking_set.txt
 cat training_set_pos.txt training_set_neg.txt > training_set.txt
 ```
 
-The Training and Benchmarking sets contain, respectively, 8492 and 2124 entries.
+The Training and Benchmarking sets contain, respectively, 8492 and 2124 entries. You can access these and the intermediary files in this GitHub repository at `./preprocessing/Train_bench_sets/`.
 
 ## 2.2 Retrieve metadata
-The newly created datasets in contain just the UniProt IDs. The UniProt ID Mapping Tool is necessary now to retrieve numerous useful metadata, that we will use to do statistical analysis, downloadable in a `.tsv` format:
+The newly created datasets contain just the UniProt IDs. The UniProt ID Mapping Tool is necessary now to retrieve numerous useful metadata, that we will use to do statistical analysis, downloadable in a `.tsv` format:
 - Signal peptide length
 - Protein length
 - Taxonomic lineage (to extract Kingdom)
@@ -216,10 +229,12 @@ cat benchmarking_set_parsed_negc.tsv benchmarking_set_parsed_posc.tsv > benchmar
 cat training_set_parsed_negc.tsv training_set_parsed_posc.tsv > training_set_parsed_totc.tsv
 ```
 
+You can access these and the intermediary files in this GitHub repository at `./preprocessing/Train_bench_sets/`.
+ 
 ## 2.3. Cross-validation sets
 A **Cross-Validation** procedure is crucial to evaluating the model design and avoiding potential biases such as overfitting; validating the model on a limited amount of data allows for a less optimistic estimate of how well the model will generalize, also helps in the choice of the hyperparameters.
 
-To maintain the correct proportion of negative and positive entries in each cross-validation set, the Training set is divided into a **parsed Positive Training set** (874 entries) and a **parsed Negative Training set** (7618 entries). Each of the two sets is then divided into 5 subsets, leading to **5 Cross Validation positive subsets** and **5 Cross Validation negative subsets**. The positive and negative cross-validation subsets are then paired and concatenated into **5 cross-validation sets**, containing CV0, CV1, CV2, and CV3 with 1699 entries and CV4 with 1697 entries, respectively.
+To maintain the correct proportion of negative and positive entries in each cross-validation set, the Training set is divided into a **parsed Positive Training set** (874 entries) and a **parsed Negative Training set** (7618 entries). Each of the two sets is then divided into 5 subsets, leading to **5 Cross Validation positive subsets** and **5 Cross Validation negative subsets**. The positive and negative cross-validation subsets are then paired and concatenated into **5 cross-validation sets**, containing CV0, CV1, CV2, and CV3 with 1699 entries and CV4 with 1697 entries, respectively. You can access these and the intermediary files in this GitHub repository at `./preprocessing/CV_set/`.
 
 ```
 split -d -a 1 -l$(( ($(wc -l < training_set_parsed_negc.tsv) +4)/ 5)) training_set_parsed_negc.tsv CV_neg_
@@ -232,7 +247,7 @@ cd .. | mkdir ./SETs | cp ../datasets/training_set_parsed_posc.tsv ./SETs |  cp 
 ```
 
 # 3. (OPTIONAL) Statistical analysis of the datasets
-To visualize your data and help yourself contextualize the problem, as well as detect unforseen bias, I suggest you do a statistical analysis of the data. As we dowloaded the metadata from UniProt, we are able to conduct the following analysis. The details and explanations of each analysis can be appreciated in the final report and the supplementary material () while the commands used for the analysis in the Jupyter Notebook (). Here I will just show some of the results.
+To visualize your data and help yourself contextualize the problem, as well as detect unforseen bias, I suggest you do a statistical analysis of the data. As we dowloaded the metadata from UniProt, we are able to conduct the following analysis. The details and explanations of each analysis can be appreciated in the final report and the supplementary material (`lb2_final_report_GO.pdf`, `supplementary_material_GO.pdf`) while the commands used for the analysis in the Jupyter Notebook (`./data_analysis/DATA_ANALYSIS`). Here I will just show some of the results.
 
 - Signal peptide length distribution. The length has been normalized to a log10 scale.
 - Protein length distribution. The length has been normalized to a log10
@@ -247,21 +262,21 @@ To visualize your data and help yourself contextualize the problem, as well as d
 # 4. Von Heijne method
 The first method I decided to implement is the Von Heijne method. Briefly, the algorithm workflow is the following: 
 
-1. Starting from a set of aligned sequences, a position-specific probability matrix (PSPM) is computed. This matrix stores the frequency of each residue type at each position; the number of rows is equal to the number of different characters in the alphabet (20 for proteins) and the number of columns is equal to the length of the motif. Given a set S of N aligned sequences of length L, the PSPM (M) is computed as follows:
+1. Starting from a set of aligned sequences, a **position-specific probability matrix (PSPM)** is computed. This matrix stores the frequency of each residue type at each position; the number of rows is equal to the number of different characters in the alphabet (20 for proteins) and the number of columns is equal to the length of the motif. Given a set S of N aligned sequences of length L, the PSPM (M) is computed as follows:
 
 ![image](https://github.com/user-attachments/assets/748c6f57-8c33-4c5e-a397-fbc5a0ee0c41)
 
-In order to avoid zero probabilities in the PSPM and hence the impossibility of computing the log odds (since log(0) is undefined), pseudo counts are added during the computation of PSPM. In the simplest setting, the count matrix is initialized, assuming each residue is observed at least once in all positions. Practically, this means initializing the PSPM with 1 in all cells, while formally, the formula for computing the PSPM (M) becomes:
+In order to avoid zero probabilities in the PSPM and hence the impossibility of computing the log odds (since log(0) is undefined), **pseudo counts** are added during the computation of PSPM. In the simplest setting, the count matrix is initialized, assuming each residue is observed at least once in all positions. Practically, this means initializing the PSPM with 1 in all cells, while formally, the formula for computing the PSPM (M) becomes:
 
 ![image](https://github.com/user-attachments/assets/c8c06d90-e017-4293-abf8-35a69a9c85aa)
 
-2. From the PSPM, a position-specific weight matrix (PSWM) is computed. This matrix is identical in structure, but it stores the log-odds ratio between amino acid frequencies per position in the PSPM and a background model (the SwissProt composition). From the PSPM (M), the PSWM (W) is computed as follows:
+2. From the PSPM, a **position-specific weight matrix (PSWM)** is computed. This matrix is identical in structure, but it stores the **log-odds ratio** between amino acid frequencies per position in the PSPM and a background model (the SwissProt composition). From the PSPM (M), the PSWM (W) is computed as follows:
 
 ![image](https://github.com/user-attachments/assets/73cfa7cf-053d-46d5-891e-ac2a7d2648e9)
 
 In the PSWM, a value can be positive when the probability of having a certain residue in a given position differs from the background and is higher. Contrarily, when it is lower or equal to 0, the probability of having that residue differs from the background, and it is lower; it is more likely that the position is a random site rather than a functional one.
 
-3. Finally, by choosing any fragment of a sequence, the log-likelihood can be computed starting from the PSWM, returning a score that indicates the likelihood of occurrence of the motif. In this way, proteins can be scanned to search for the motif with a sliding window approach.
+3. Finally, by choosing any fragment of a sequence, the **log-likelihood** can be computed starting from the PSWM, returning a score that indicates the likelihood of occurrence of the motif. In this way, proteins can be scanned to search for the motif with a sliding window approach.
 Given any piece of sequence X = (x1,..,xL) of length L, one can compute the log-likelihood score of X given the PSWM as:
 
 ![image](https://github.com/user-attachments/assets/671cad53-bf21-4ed5-ae70-40e4ff3573f0)
