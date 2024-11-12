@@ -244,6 +244,103 @@ To visualize your data and help yourself contextualize the problem, as well as d
 ![image](https://github.com/user-attachments/assets/1eee1e78-8652-44c5-a315-e0d903e3de62)
 ![image](https://github.com/user-attachments/assets/01959d65-d1c4-42ed-9ae4-9e57f8dab2ed)
 
-### 1.3. Perform and visualize statistics on both datasets
-
 ## 4. Von Heijne method
+The first method I decided to implement is the Von Heijne method. Briefly, the algorithm workflow is the following: 
+
+1. Starting from a set of aligned sequences, a position-specific probability matrix (PSPM) is computed. This matrix stores the frequency of each residue type at each position; the number of rows is equal to the number of different characters in the alphabet (20 for proteins) and the number of columns is equal to the length of the motif. Given a set S of N aligned sequences of length L, the PSPM (M) is computed as follows:
+
+![image](https://github.com/user-attachments/assets/748c6f57-8c33-4c5e-a397-fbc5a0ee0c41)
+
+In order to avoid zero probabilities in the PSPM and hence the impossibility of computing the log odds (since log(0) is undefined), pseudo counts are added during the computation of PSPM. In the simplest setting, the count matrix is initialized, assuming each residue is observed at least once in all positions. Practically, this means initializing the PSPM with 1 in all cells, while formally, the formula for computing the PSPM (M) becomes:
+
+![image](https://github.com/user-attachments/assets/c8c06d90-e017-4293-abf8-35a69a9c85aa)
+
+2. From the PSPM, a position-specific weight matrix (PSWM) is computed. This matrix is identical in structure, but it stores the log-odds ratio between amino acid frequencies per position in the PSPM and a background model (the SwissProt composition). From the PSPM (M), the PSWM (W) is computed as follows:
+
+![image](https://github.com/user-attachments/assets/73cfa7cf-053d-46d5-891e-ac2a7d2648e9)
+
+In the PSWM, a value can be positive when the probability of having a certain residue in a given position differs from the background and is higher. Contrarily, when it is lower or equal to 0, the probability of having that residue differs from the background, and it is lower; it is more likely that the position is a random site rather than a functional one.
+
+3. Finally, by choosing any fragment of a sequence, the log-likelihood can be computed starting from the PSWM, returning a score that indicates the likelihood of occurrence of the motif. In this way, proteins can be scanned to search for the motif with a sliding window approach.
+Given any piece of sequence X = (x1,..,xL) of length L, one can compute the log-likelihood score of X given the PSWM as:
+
+![image](https://github.com/user-attachments/assets/671cad53-bf21-4ed5-ae70-40e4ff3573f0)
+
+### 4.1 Implementation
+First, you should create a conda environment with all the libraries we need, and use it for both the Von Heijne and the SVM implementations:
+```
+conda create --name <YOUR_ENV> pandas numpy matplotlib seaborn scikit-learn
+conda activate <YOUR_ENV>
+```
+Then, you can organize the workflow in the following phases:
+
+- **Training, Cross Validation, and Threshold Selection**: In 5 different runs, you use 3 cross-validation sets to compute a PSWM for model training. For each run, you test the model on a validation set to extract an optimal threshold, which you then use to discriminate positive and negative proteins in a final testing procedure, where you evaluate the performance.
+- **Prediction**: You calculate the average of the thresholds obtained from each of the 5 runs. Then, you perform a new training procedure using all the positive examples from the Training set. You test the newly generated PSWM on the Benchmarking set, applying the average threshold to discriminate positives and negatives. Finally, you evaluate the performance of the final model and store the results in a file.
+
+I prepared specific python and bash scripts that can be found at:
+
+```
+#dowload the python scripts and put them in the VH folder
+wget 
+#create a directory to store intermediate results
+mkdir ./PSWMs
+```
+
+#### 4.1.1 Training, Cross-Validation and Threshold Selection
+During this step, as previously explained, 5 runs have to be done: in each run, 3 positive cross-validation sets are used for training and 1 whole CV set for testing. 
+1. Training: Three of the five cross-validation positive sets are alternately used to compute a PSWM matrix for model training. First, the cleavage motifs are extracted from the sequences (position -13 to +2 relative to the signal peptide length). From this stacked alignment and the SwissProt distribution, the PSPM and the PSWM are computed. For each run, the PSWM is stored in a TXT file, resulting in a total of five PSWMs.
+2. Cross Validation: The first 90 N-terminal positions from the protein sequences in the validation subset are extracted. A sliding window approach calculates the score (log likelihood) of every 15-residue subsequence for each sequence (e.g., subsequence 1-15, subsequence 2-16, etc.). The highest positional score for each sequence is saved as the global score. Precision and recall values are computed using the precision-recall curve and are used to calculate the F1 score. The optimal threshold of the model is determined as the one associated with the best F1 score.
+3. Testing: The first 90 N-terminal positions from the protein sequences in the validation subset are extracted, and the score is calculated using a sliding window approach on 15-residue subsequences, recording the highest score for each sequence. If the score is higher than the optimal threshold found in the previous step, the protein is predicted as positive (1); if lower, as negative (0). Using the lists of true and predicted classes, each model’s performance is evaluated with different metrics.
+Finally, you can save a TSV document containing all the results from each run.
+
+```
+#execute this to compute the training and cross validation and receive a tsv file containing the results of each run
+rm training_predictions.tsv | for i in {0..4}; do python ./vH_train.py ./CVs/CV_pos_$((($i+2)%5)) ./CVs/CV_pos_$((($i+3)%5)) ./CVs/CV_pos_$((($i+4)%5)) PSWM_$((($i+2)%5))$((($i+3)%5))$((($i+4)%5)) ; python ./vH_predict.py ./CVs/CV$((($i+1)%5)).txt PSWM_$((($i+2)%5))$((($i+3)%5))$((($i+4)%5)) ./CVs/CV$i.txt ; done
+```
+
+#### 4.1.2. Prediction
+After obtaining the results and metrics for each model, average the thresholds used in each run to calculate an average threshold, which then you can use to classify proteins in a final model trained on the entire positive Training set and tested on the Benchmarking set.
+
+- Training: All positive examples from the Training set are used to train a final model. The cleavage sites are extracted, and the PSPM and PSWM are computed as described previously.
+- Testing: For the entire Benchmarking set, the first 90 N-terminal residues are extracted, and the score is computed using the same sliding window approach. This time, the average threshold obtained in the previous phase is applied to classify proteins as Negatives or Positives. Finally, using the list of true classes and the newly predicted ones, scoring metrics are calculated to evaluate the performance of the final model produced with the Von Heijne method.
+
+```
+#execute this to test the method on the benchmarking test (with thraining done on the training set) and receive a file with the scores of the procedure
+rm benchmarking_results.tsv | rm predicted_vs_true.tsv | python ./vH_test.py ./SETs/training_set_parsed_posc.tsv ./SETs/benchmarking_set_parsed_totc.tsv
+```
+
+## 5. Support Vector Machine
+Please refer to the report for a detailed explanation of how SVMs work. Here, I'm going to just report the workflow.
+
+### 5.1 Implementation
+To apply this machine learning method and create a support vector classifier (SVC) for signal peptide prediction, I conducted the following steps :
+
+1. Feature Extraction and Input Encoding: Discriminatory features are selected and encoded in a suitable format for the SVM algorithm.
+2. Training, Validation, and Testing: A grid search for hyperparameters trains multiple models on Cross Validation sets, tests them on a validation set to select the best-performing model, and evaluates it on a testing set.
+3.Prediction: With the hyperparameters of the best model chosen, a final model is trained on the Training set and tested on the Benchmarking set.
+
+This method is implemented in Python using the Scikit Learn library, a machine-learning library based on Numpy, Scipy, and Matplotlib. The chosen kernel type for the classifier is the RBF Kernel, which requires defining two hyperparameters:
+
+- γ parameter: It determines how far the influence of a single training example reaches during transformation, acting as the inverse of the radius of influence of the support vectors. The model’s behaviour is highly sensitive to γ; a large γ restricts the area of influence to the support vector itself, risking overfitting, while a very small γ constrains the model too much, limiting its ability to capture data complexity.
+- C parameter: This parameter balances the correct classification of training examples with the maximization of the decision function's margin. A larger C allows for a smaller margin if it improves the correct classification of training points. In comparison, a lower C encourages a larger margin and simpler decision function at the cost of training accuracy.
+
+#### 5.1.1 Feature Extraction and Input Encoding
+An SVM requires input examples in the form of D-dimensional vectors. The dimensions of such vectors are equal to the data’s number of features. To optimally design the SVC, it is crucial to first define a set of discriminatory features for the proteins (the positive and negative examples) and encode them in the proper format for the algorithm. Therefore, the discriminatory features I choose are:
+- Aminoacidic composition (C): as we have seen in statistical analysis, the frequency of some residues in signal peptides differs from the background SwissProt distribution.
+- Hydrophobicity(HP): as we have seen, hydrophobic residues are more abundant in signal peptides. Hydrophobicity has been calculated using the Kyte & Dolittle scale (Kyte and Doolittle, 1982).
+- Charge (CH): as we have seen, in the signal peptides’ N-terminal
+ region, a positively charged region is usually conserved.
+- α-helix-tendency (AH): as the hydrophobic amino acids tend to form a single α-helix, this feature may be discriminatory for signal peptides. For the calculation of α-helix tendency, the Chou and Fasman scale has been used (Chou and Fasman, 1978).
+
+A "K" number of residues is selected for each cross-validation set sequence, starting from the N-termini. For each of the aforementioned features, except for the composition, the score for each residue in subsequences of length K is computed using a sliding window approach. The sliding window is set to 5 residues (7 for the α-helix tendency) to incorporate the effect of surrounding residues on the score of each residue. The computations are based on the feature scales retrieved from the Expasy database. After calculating the scores for each residue, the following measurements are computed for each subsequence:
+
+- Maximal value
+- Average value
+- Position of the maximal value in the sequence
+
+These values represent the final set of extracted features from the hydrophobicity, charge, and α-helix tendency discriminatory features. The length of the subsequences, K, is a hyperparameter, chosen to range from 20 to 24 residues, as this range represents the average signal peptide length.
+
+For each value of K, all features are extracted and scaled from 0 to 1 for all proteins in each cross-validation set and saved in TSV files. This results in a total of 25 TSV files (one for each CV and all K values). Each TSV file contains protein codes as rows and features as columns, in the following order: the frequency of each amino acid, the average value, maximum value, position of maximum value of the discriminatory features (hydrophobicity, charge, and helix tendency), and finally, the class of the proteins.
+
+Storing the feature extraction results in this file format allows for easy input encoding, as columns can be selected for different feature combinations. The TSV files can also be easily transformed into pandas data frames and Numpy arrays. All the different combinations of features and hyperparameters are used to train the SVC.
+
