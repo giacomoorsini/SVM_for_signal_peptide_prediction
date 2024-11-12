@@ -1,0 +1,2 @@
+Run	Threshold	Precision	Recall	F1	ACC	MCC	AUC	TN	FP	FN	TP
+benchmarking_set_parsed_totc.tsv	6.246	0.703	0.744	0.739	0.941	0.69	0.968	1836	69	56	163
